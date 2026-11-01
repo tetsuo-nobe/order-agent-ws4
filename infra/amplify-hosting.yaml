@@ -1,0 +1,101 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >
+  order-agent-ws4 frontend hosting.
+  Amplify Hosting app (static React SPA built by Vite) connected to a GitHub repository.
+  Amplify Gen2 backend is not used.
+
+Parameters:
+  AppName:
+    Type: String
+    Default: order-agent-ws4-frontend
+    Description: Amplify app name
+
+  RepositoryUrl:
+    Type: String
+    Default: https://github.com/tetsuo-nobe/order-agent-ws4
+    Description: GitHub repository URL (without .git)
+
+  BranchName:
+    Type: String
+    Default: main
+    Description: Branch to deploy
+
+  GitHubAccessToken:
+    Type: String
+    NoEcho: true
+    Description: GitHub personal access token used by Amplify to connect the repository
+
+  AgentRuntimeArn:
+    Type: String
+    Description: AgentCore Runtime ARN
+
+  AgentRegion:
+    Type: String
+    Default: us-west-2
+    Description: AgentCore Runtime region
+
+  CognitoUserPoolId:
+    Type: String
+    Description: Cognito User Pool ID
+
+  CognitoClientId:
+    Type: String
+    Description: Cognito App Client ID
+
+Resources:
+  # Amplify Hosting アプリ（ビルド設定はリポジトリの amplify.yml を使用）
+  AmplifyApp:
+    Type: AWS::Amplify::App
+    Properties:
+      Name: !Ref AppName
+      Description: Order management agent chat UI (React + Vite)
+      Repository: !Ref RepositoryUrl
+      AccessToken: !Ref GitHubAccessToken
+      Platform: WEB
+      # ビルド時に埋め込む接続先（秘密情報ではない）
+      EnvironmentVariables:
+        - Name: VITE_AGENT_RUNTIME_ARN
+          Value: !Ref AgentRuntimeArn
+        - Name: VITE_AGENT_REGION
+          Value: !Ref AgentRegion
+        - Name: VITE_COGNITO_USER_POOL_ID
+          Value: !Ref CognitoUserPoolId
+        - Name: VITE_COGNITO_CLIENT_ID
+          Value: !Ref CognitoClientId
+      # SPA: 静的ファイル以外のパスは index.html を返す
+      CustomRules:
+        - Source: "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>"
+          Target: /index.html
+          Status: "200"
+      CustomHeaders: |
+        customHeaders:
+          - pattern: "**/*"
+            headers:
+              - key: Strict-Transport-Security
+                value: max-age=31536000; includeSubDomains
+              - key: X-Content-Type-Options
+                value: nosniff
+              - key: X-Frame-Options
+                value: DENY
+              - key: Referrer-Policy
+                value: strict-origin-when-cross-origin
+
+  # デプロイ対象ブランチ（push で自動ビルド）
+  AmplifyBranch:
+    Type: AWS::Amplify::Branch
+    Properties:
+      AppId: !GetAtt AmplifyApp.AppId
+      BranchName: !Ref BranchName
+      Description: Production branch
+      Stage: PRODUCTION
+      EnableAutoBuild: true
+      Framework: React
+
+Outputs:
+  AmplifyAppId:
+    Description: Amplify app ID
+    Value: !GetAtt AmplifyApp.AppId
+
+  AppUrl:
+    Description: Frontend URL
+    Value: !Sub "https://${BranchName}.${AmplifyApp.DefaultDomain}"

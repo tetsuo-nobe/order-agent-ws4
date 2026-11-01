@@ -1,0 +1,22 @@
+# Amplify Hosting のビルド設定（Amplify Gen2 のバックエンドは使用しない）
+# VITE_* の接続先は Amplify アプリの環境変数（infra/amplify-hosting.yaml）から渡される
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        # Vite 8 は Node.js 22.12 以上が必要
+        - nvm install 22
+        - nvm use 22
+        - node --version
+        - npm ci
+    build:
+      commands:
+        - npm run build
+  artifacts:
+    baseDirectory: dist
+    files:
+      - "**/*"
+  cache:
+    paths:
+      - node_modules/**/*

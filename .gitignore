@@ -1,0 +1,15 @@
+# 依存関係・ビルド成果物
+node_modules/
+dist/
+
+# 環境変数（ローカル開発用）
+.env
+.env.*
+!.env.example
+
+# ログ・OS・エディタ
+*.log
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
