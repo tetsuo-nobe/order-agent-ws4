@@ -75,18 +75,21 @@ Resources:
         - Source: "</^[^.]+$|\\.(?!(css|gif|ico|jpg|js|png|txt|svg|woff|woff2|ttf|map|json|webp)$)([^.]+$)/>"
           Target: /index.html
           Status: "200"
-      CustomHeaders: |
-        customHeaders:
-          - pattern: "**/*"
-            headers:
-              - key: Strict-Transport-Security
-                value: max-age=31536000; includeSubDomains
-              - key: X-Content-Type-Options
-                value: nosniff
-              - key: X-Frame-Options
-                value: DENY
-              - key: Referrer-Policy
-                value: strict-origin-when-cross-origin
+      # モノリポではカスタムヘッダーも applications / appRoot 形式で指定する必要がある
+      CustomHeaders: !Sub |
+        applications:
+          - appRoot: ${AppRoot}
+            customHeaders:
+              - pattern: "**/*"
+                headers:
+                  - key: Strict-Transport-Security
+                    value: max-age=31536000; includeSubDomains
+                  - key: X-Content-Type-Options
+                    value: nosniff
+                  - key: X-Frame-Options
+                    value: DENY
+                  - key: Referrer-Policy
+                    value: strict-origin-when-cross-origin
 
   # デプロイ対象ブランチ（push で自動ビルド）
   AmplifyBranch:
