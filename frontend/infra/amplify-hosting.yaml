@@ -1,8 +1,8 @@
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >
   order-agent-ws4 frontend hosting.
-  Amplify Hosting app (static React SPA built by Vite) connected to a GitHub repository.
-  Amplify Gen2 backend is not used.
+  Amplify Hosting app (static React SPA built by Vite) connected to a GitHub monorepo.
+  The app lives in the frontend folder. Amplify Gen2 backend is not used.
 
 Parameters:
   AppName:
@@ -19,6 +19,11 @@ Parameters:
     Type: String
     Default: main
     Description: Branch to deploy
+
+  AppRoot:
+    Type: String
+    Default: frontend
+    Description: Path of the frontend app in the monorepo (must match appRoot in amplify.yml)
 
   GitHubAccessToken:
     Type: String
@@ -52,8 +57,11 @@ Resources:
       Repository: !Ref RepositoryUrl
       AccessToken: !Ref GitHubAccessToken
       Platform: WEB
-      # ビルド時に埋め込む接続先（秘密情報ではない）
       EnvironmentVariables:
+        # モノリポ内のアプリのルート（リポジトリ直下の amplify.yml の appRoot と一致させる）
+        - Name: AMPLIFY_MONOREPO_APP_ROOT
+          Value: !Ref AppRoot
+        # ビルド時に埋め込む接続先（秘密情報ではない）
         - Name: VITE_AGENT_RUNTIME_ARN
           Value: !Ref AgentRuntimeArn
         - Name: VITE_AGENT_REGION

@@ -1,15 +1,26 @@
+# モノリポ共通の除外設定（各フォルダの .gitignore も併用）
+
 # 依存関係・ビルド成果物
 node_modules/
 dist/
+cdk.out/
+.aws-sam/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
 
-# 環境変数（ローカル開発用）
+# 環境変数・秘密情報
 .env
 .env.*
 !.env.example
 
-# ログ・OS・エディタ
-*.log
+# ツールの一時ファイル
+.playwright-mcp/
+
+# OS・エディタ
 .DS_Store
 Thumbs.db
 .vscode/
 .idea/
+*.log

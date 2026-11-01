@@ -1,0 +1,11 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "InvokeQuoteGateway",
+      "Effect": "Allow",
+      "Action": "bedrock-agentcore:InvokeGateway",
+      "Resource": "arn:aws:bedrock-agentcore:us-west-2:068048081706:gateway/order-agent-ws4-quote-gateway-xiuiypzxtg"
+    }
+  ]
+}

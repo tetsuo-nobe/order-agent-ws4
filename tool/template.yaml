@@ -1,0 +1,264 @@
+AWSTemplateFormatVersion: "2010-09-09"
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  order-agent-ws4 tool stack.
+  Cognito User Pool (JWT for AgentCore Runtime inbound auth),
+  quote PDF Lambda function, S3 bucket, and AgentCore Gateway (IAM inbound auth)
+  with the Lambda function as its target.
+
+Parameters:
+  ProjectName:
+    Type: String
+    Default: order-agent-ws4
+    Description: Prefix for resource names
+
+  PresignedUrlExpiresIn:
+    Type: Number
+    Default: 3600
+    MinValue: 60
+    MaxValue: 43200
+    Description: Expiration in seconds of the presigned URL for downloading the quote PDF
+
+Globals:
+  Function:
+    Timeout: 30
+    MemorySize: 512
+
+Resources:
+  # ---------------------------------------------------------------
+  # 見積書 PDF を保存する S3 バケット（非公開・暗号化・30日で自動削除）
+  # ---------------------------------------------------------------
+  QuoteBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      OwnershipControls:
+        Rules:
+          - ObjectOwnership: BucketOwnerEnforced
+      LifecycleConfiguration:
+        Rules:
+          - Id: ExpireQuotes
+            Status: Enabled
+            Prefix: quotes/
+            ExpirationInDays: 30
+
+  # HTTPS 以外のアクセスを拒否
+  QuoteBucketPolicy:
+    Type: AWS::S3::BucketPolicy
+    Properties:
+      Bucket: !Ref QuoteBucket
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: DenyInsecureTransport
+            Effect: Deny
+            Principal: "*"
+            Action: s3:*
+            Resource:
+              - !GetAtt QuoteBucket.Arn
+              - !Sub "${QuoteBucket.Arn}/*"
+            Condition:
+              Bool:
+                aws:SecureTransport: "false"
+
+  # ---------------------------------------------------------------
+  # 見積書 PDF 生成 Lambda（AgentCore Gateway の Lambda ターゲット）
+  # ---------------------------------------------------------------
+  CreateQuoteFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-create-quote"
+      Description: Generates an order quote PDF and returns an S3 presigned URL (AgentCore Gateway tool)
+      CodeUri: src/
+      Handler: handler.lambda_handler
+      Runtime: python3.13
+      Architectures:
+        - x86_64
+      Environment:
+        Variables:
+          QUOTE_BUCKET_NAME: !Ref QuoteBucket
+          PRESIGNED_URL_EXPIRES_IN: !Ref PresignedUrlExpiresIn
+      Policies:
+        - Statement:
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+              Resource: !Sub "${QuoteBucket.Arn}/quotes/*"
+
+  CreateQuoteFunctionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${CreateQuoteFunction}"
+      RetentionInDays: 30
+
+  # ---------------------------------------------------------------
+  # AgentCore Gateway のサービスロール（Lambda ターゲットを呼び出す）
+  # ---------------------------------------------------------------
+  GatewayRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: bedrock-agentcore.amazonaws.com
+            Action: sts:AssumeRole
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !Sub "arn:${AWS::Partition}:bedrock-agentcore:${AWS::Region}:${AWS::AccountId}:gateway/*"
+      Policies:
+        - PolicyName: InvokeCreateQuoteFunction
+          PolicyDocument:
+            Version: "2012-10-17"
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource: !GetAtt CreateQuoteFunction.Arn
+
+  # ---------------------------------------------------------------
+  # AgentCore Gateway（MCP / inbound は IAM 認証）
+  # ---------------------------------------------------------------
+  QuoteGateway:
+    Type: AWS::BedrockAgentCore::Gateway
+    Properties:
+      Name: !Sub "${ProjectName}-quote-gateway"
+      Description: Gateway that provides the order quote creation and download tool
+      AuthorizerType: AWS_IAM
+      ProtocolType: MCP
+      RoleArn: !GetAtt GatewayRole.Arn
+
+  # ---------------------------------------------------------------
+  # Gateway ターゲット（Lambda 関数 + ツールスキーマ）
+  # MCP 上のツール名は "quote-lambda-target___create_quote" になる
+  # ---------------------------------------------------------------
+  QuoteGatewayTarget:
+    Type: AWS::BedrockAgentCore::GatewayTarget
+    Properties:
+      GatewayIdentifier: !GetAtt QuoteGateway.GatewayIdentifier
+      Name: quote-lambda-target
+      Description: Lambda function that generates order quote PDFs
+      CredentialProviderConfigurations:
+        - CredentialProviderType: GATEWAY_IAM_ROLE
+      TargetConfiguration:
+        Mcp:
+          Lambda:
+            LambdaArn: !GetAtt CreateQuoteFunction.Arn
+            ToolSchema:
+              InlinePayload:
+                - Name: create_quote
+                  Description: >-
+                    Creates an order quote (PDF) and returns a download URL.
+                    Specify the product ID, customer name, quantity, and currency (USD or JPY).
+                    The unit price is converted to the specified currency at a fixed rate
+                    (1 USD = 150 JPY), and the total excludes tax.
+                  InputSchema:
+                    Type: object
+                    Properties:
+                      product_id:
+                        Type: string
+                        Description: Product ID (e.g. PROD-001)
+                      customer_name:
+                        Type: string
+                        Description: Customer name printed on the quote
+                      quantity:
+                        Type: integer
+                        Description: Order quantity (integer, 1 or more)
+                      currency:
+                        Type: string
+                        Description: Quote currency (USD or JPY)
+                    Required:
+                      - product_id
+                      - customer_name
+                      - quantity
+                      - currency
+
+  # ---------------------------------------------------------------
+  # Cognito User Pool（AgentCore Runtime の JWT 認証用）
+  # ---------------------------------------------------------------
+  AgentUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${ProjectName}-users"
+      AdminCreateUserConfig:
+        AllowAdminCreateUserOnly: false
+      UsernameAttributes:
+        - email
+      AutoVerifiedAttributes:
+        - email
+      AccountRecoverySetting:
+        RecoveryMechanisms:
+          - Name: verified_email
+            Priority: 1
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 8
+          RequireLowercase: true
+          RequireNumbers: true
+          RequireSymbols: false
+          RequireUppercase: false
+
+  # SPA 用パブリッククライアント（シークレットなし）
+  # アクセストークンの client_id を AgentCore の allowedClients で検証する
+  AgentUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: !Sub "${ProjectName}-web"
+      UserPoolId: !Ref AgentUserPool
+      GenerateSecret: false
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+      PreventUserExistenceErrors: ENABLED
+      EnableTokenRevocation: true
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 30
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+
+Outputs:
+  QuoteBucketName:
+    Description: S3 bucket that stores quote PDFs
+    Value: !Ref QuoteBucket
+
+  CreateQuoteFunctionArn:
+    Description: ARN of the quote PDF Lambda function
+    Value: !GetAtt CreateQuoteFunction.Arn
+
+  GatewayIdentifier:
+    Description: AgentCore Gateway ID
+    Value: !GetAtt QuoteGateway.GatewayIdentifier
+
+  GatewayArn:
+    Description: AgentCore Gateway ARN (Resource for InvokeGateway on the Runtime execution role)
+    Value: !GetAtt QuoteGateway.GatewayArn
+
+  GatewayUrl:
+    Description: AgentCore Gateway MCP endpoint URL (GATEWAY_URL for the agent)
+    Value: !GetAtt QuoteGateway.GatewayUrl
+
+  UserPoolId:
+    Description: Cognito User Pool ID (used by the frontend)
+    Value: !Ref AgentUserPool
+
+  UserPoolClientId:
+    Description: Cognito App Client ID (AgentCore allowedClients and frontend)
+    Value: !Ref AgentUserPoolClient
+
+  CognitoDiscoveryUrl:
+    Description: OIDC discovery URL (AgentCore customJwtAuthorizer.discoveryUrl)
+    Value: !Sub "https://cognito-idp.${AWS::Region}.amazonaws.com/${AgentUserPool}/.well-known/openid-configuration"

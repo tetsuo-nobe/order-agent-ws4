@@ -1,0 +1,60 @@
+{
+  "$schema": "https://schema.agentcore.aws.dev/v1/agentcore.json",
+  "name": "order4",
+  "version": 1,
+  "managedBy": "CDK",
+  "tags": {
+    "agentcore:created-by": "agentcore-cli",
+    "agentcore:project-name": "order4"
+  },
+  "runtimes": [
+    {
+      "name": "order",
+      "build": "CodeZip",
+      "entrypoint": "main.py",
+      "codeLocation": "app/order/",
+      "runtimeVersion": "PYTHON_3_14",
+      "networkMode": "PUBLIC",
+      "protocol": "HTTP",
+      "authorizerType": "CUSTOM_JWT",
+      "authorizerConfiguration": {
+        "customJwtAuthorizer": {
+          "discoveryUrl": "https://cognito-idp.us-west-2.amazonaws.com/us-west-2_yvR9Hcf4j/.well-known/openid-configuration",
+          "allowedClients": [
+            "445cu1fg0nmgio08v9c0pha4t3"
+          ]
+        }
+      },
+      "requestHeaderAllowlist": [
+        "Authorization"
+      ],
+      "envVars": [
+        {
+          "name": "GATEWAY_URL",
+          "value": "https://order-agent-ws4-quote-gateway-xiuiypzxtg.gateway.bedrock-agentcore.us-west-2.amazonaws.com/mcp"
+        }
+      ],
+      "additionalPolicies": [
+        "iam/invoke-gateway-policy.json"
+      ]
+    }
+  ],
+  "memories": [
+    {
+      "name": "orderMemory",
+      "eventExpiryDuration": 30,
+      "strategies": []
+    }
+  ],
+  "knowledgeBases": [],
+  "credentials": [],
+  "evaluators": [],
+  "onlineEvalConfigs": [],
+  "agentCoreGateways": [],
+  "policyEngines": [],
+  "configBundles": [],
+  "abTests": [],
+  "harnesses": [],
+  "datasets": [],
+  "payments": []
+}

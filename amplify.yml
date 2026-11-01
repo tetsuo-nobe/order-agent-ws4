@@ -1,22 +1,26 @@
-# Amplify Hosting のビルド設定（Amplify Gen2 のバックエンドは使用しない）
-# VITE_* の接続先は Amplify アプリの環境変数（infra/amplify-hosting.yaml）から渡される
+# Amplify Hosting のビルド設定（モノリポ形式。Amplify Gen2 のバックエンドは使用しない）
+# appRoot は Amplify アプリの環境変数 AMPLIFY_MONOREPO_APP_ROOT と同じ値にする
+# （frontend/infra/amplify-hosting.yaml で設定）。
+# コマンドは appRoot（frontend/）で実行され、baseDirectory も appRoot からの相対パス。
 version: 1
-frontend:
-  phases:
-    preBuild:
-      commands:
-        # Vite 8 は Node.js 22.12 以上が必要
-        - nvm install 22
-        - nvm use 22
-        - node --version
-        - npm ci
-    build:
-      commands:
-        - npm run build
-  artifacts:
-    baseDirectory: dist
-    files:
-      - "**/*"
-  cache:
-    paths:
-      - node_modules/**/*
+applications:
+  - appRoot: frontend
+    frontend:
+      phases:
+        preBuild:
+          commands:
+            # Vite 8 は Node.js 22.12 以上が必要
+            - nvm install 22
+            - nvm use 22
+            - node --version
+            - npm ci
+        build:
+          commands:
+            - npm run build
+      artifacts:
+        baseDirectory: dist
+        files:
+          - "**/*"
+      cache:
+        paths:
+          - node_modules/**/*

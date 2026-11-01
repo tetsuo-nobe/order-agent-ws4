@@ -1,0 +1,23 @@
+{
+  "targets": {
+    "default": {
+      "resources": {
+        "runtimes": {
+          "order": {
+            "runtimeId": "order4_order-3V0cEYGLkb",
+            "runtimeArn": "arn:aws:bedrock-agentcore:us-west-2:068048081706:runtime/order4_order-3V0cEYGLkb",
+            "roleArn": "arn:aws:iam::068048081706:role/AgentCore-order4-default-ApplicationAgentOrderRunti-Og82bx8B8VvV"
+          }
+        },
+        "memories": {
+          "orderMemory": {
+            "memoryId": "order4_orderMemory-f5ovNi4lFH",
+            "memoryArn": "arn:aws:bedrock-agentcore:us-west-2:068048081706:memory/order4_orderMemory-f5ovNi4lFH"
+          }
+        },
+        "stackName": "AgentCore-order4-default",
+        "deployHash": "d54bddf57c1bf700"
+      }
+    }
+  }
+}

@@ -1,0 +1,15 @@
+version = 0.1
+
+[default.build.parameters]
+cached = true
+
+[default.deploy.parameters]
+stack_name = "order-agent-ws4-tool"
+resolve_s3 = true
+s3_prefix = "order-agent-ws4-tool"
+capabilities = "CAPABILITY_IAM"
+confirm_changeset = true
+image_repositories = []
+
+[default.global.parameters]
+region = "us-west-2"
