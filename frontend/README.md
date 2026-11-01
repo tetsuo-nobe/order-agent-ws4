@@ -4,6 +4,9 @@ React + Vite の SPA です。Cognito でログインし、ブラウザから Ag
 エージェントの応答をストリーミング表示します。応答の Markdown は HTML として表示します。
 ホスティングは AWS Amplify Hosting（Gen2 のバックエンドは使用しない）です。
 
+* Next.js + Amplify ホスティングの場合はストリーミングに制約があるため、Next.js は使用しない 
+    - [Next.js 向けの Amplify サポート](https://docs.aws.amazon.com/ja_jp/amplify/latest/userguide/ssr-amplify-support.html)
+
 ```
 [ブラウザ (React SPA / Amplify Hosting)]
    │ ① Cognito User Pool に SRP でログイン → アクセストークン
